@@ -1,7 +1,6 @@
 {
-  "name": "f-board",
+  "name": "fboard",
   "version": "1.0.0",
-  "homepage": "https://[your-github-username].github.io/f-board",
   "private": true,
   "description": "Financial Board - 다양한 금융 지표 대시보드",
   "main": "index.js",
@@ -9,9 +8,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "eject": "react-scripts eject"
   },
   "dependencies": {
     "react": "^18.2.0",
