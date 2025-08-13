@@ -4,6 +4,10 @@
   "private": true,
   "description": "Financial Board - 다양한 금융 지표 대시보드",
   "main": "index.js",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
