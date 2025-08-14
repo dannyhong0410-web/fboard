@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import PageLayout from './PageLayout';
-import { fetchAllFixedIncomeData, TRADING_ECONOMICS_URLS } from '../services/fixedIncomeApi';
+import { fetchAllFixedIncomeDataOptimized, clearFixedIncomeCache } from '../services/fixedIncomeApiOptimized';
 
 const MetricsGrid = styled.div`
   display: grid;
@@ -163,50 +163,54 @@ const FixedIncomePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fixed Income 데이터 가져오기 (주식 API와 비슷한 방식)
   const fetchFixedIncomeData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('🔄 Starting Fixed Income data fetch...');
-      
-      // 새로운 API를 사용하여 모든 데이터 가져오기 (주식 API와 비슷한 방식)
-      const data = await fetchAllFixedIncomeData();
-      
-      if (data && data.length > 0) {
-        console.log(`✅ Successfully loaded ${data.length} Fixed Income rates`);
-        
-        // 실제 데이터가 있는지 확인
-        const realDataCount = data.filter(item => item.isRealData).length;
-        if (realDataCount === 0) {
-          console.log('⚠️ No real data available, showing dummy data');
-        } else {
-          console.log(`✅ ${realDataCount} real Fixed Income rates loaded`);
-        }
-        
-        setBondMetrics(data);
-      } else {
-        console.log('❌ No Fixed Income data received');
-        setError('Fixed Income 데이터를 불러올 수 없습니다.');
-      }
-      
+      // 최적화된 API 사용
+      const data = await fetchAllFixedIncomeDataOptimized();
+      setBondMetrics(data);
     } catch (err) {
       setError('Fixed Income 데이터를 불러올 수 없습니다.');
-      console.error('❌ Error fetching Fixed Income data:', err);
+      console.error('Error fetching fixed income data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 컴포넌트 마운트 시 데이터 로드
+  const handleRefresh = async () => {
+    // 캐시 초기화 후 새로고침
+    clearFixedIncomeCache();
+    await fetchFixedIncomeData();
+  };
+
   useEffect(() => {
     fetchFixedIncomeData();
   }, []);
 
-  // 채권 지표 클릭 핸들러 - Trading Economics 페이지 열기
   const handleBondClick = (title) => {
-    const url = TRADING_ECONOMICS_URLS[title];
+    // Trading Economics URL 매핑
+    const tradingEconomicsUrls = {
+      '미국 기준 금리': 'https://tradingeconomics.com/united-states/interest-rate',
+      '유로 기준 금리': 'https://tradingeconomics.com/euro-area/interest-rate',
+      '일본 기준 금리': 'https://tradingeconomics.com/japan/interest-rate',
+      '한국 기준 금리': 'https://tradingeconomics.com/south-korea/interest-rate',
+      '스위스 기준 금리': 'https://tradingeconomics.com/switzerland/interest-rate',
+      '영국 기준 금리': 'https://tradingeconomics.com/united-kingdom/interest-rate',
+      '호주 기준 금리': 'https://tradingeconomics.com/australia/interest-rate',
+      '브라질 기준 금리': 'https://tradingeconomics.com/brazil/interest-rate',
+      'US 3M': 'https://tradingeconomics.com/united-states/3-month-bill-yield',
+      'US 2Y': 'https://tradingeconomics.com/united-states/2-year-note-yield',
+      'US 10Y': 'https://tradingeconomics.com/united-states/government-bond-yield',
+      'US 30Y': 'https://tradingeconomics.com/united-states/30-year-bond-yield',
+      'Korea 2Y': 'https://tradingeconomics.com/south-korea/2-year-note-yield',
+      'Korea 10Y': 'https://tradingeconomics.com/south-korea/government-bond-yield',
+      'Japan 10Y': 'https://tradingeconomics.com/japan/government-bond-yield',
+      'Germany 10Y': 'https://tradingeconomics.com/germany/government-bond-yield'
+    };
+    
+    const url = tradingEconomicsUrls[title];
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
@@ -222,8 +226,8 @@ const FixedIncomePage = () => {
 
   return (
     <PageLayout title="Fixed Income">
-      <RefreshButton onClick={fetchFixedIncomeData}>
-        🔄 데이터 새로고침
+      <RefreshButton onClick={handleRefresh}>
+        🔄 데이터 새로고침 (최적화됨)
       </RefreshButton>
 
       {error && (
@@ -234,8 +238,8 @@ const FixedIncomePage = () => {
 
       <MetricsGrid>
         {bondMetrics.map((metric, index) => (
-          <MetricCard 
-            key={index} 
+          <MetricCard
+            key={index}
             onClick={() => handleBondClick(metric.title)}
             isRealData={metric.isRealData}
           >
@@ -251,11 +255,11 @@ const FixedIncomePage = () => {
                   {formatPercent(metric.change)}
                 </MetricChange>
                 <DataSourceIndicator isRealData={metric.isRealData}>
-                  {metric.isRealData ? '실제 데이터' : '더미 데이터'}
+                  {metric.isRealData ? '실제 데이터' : '시뮬레이션'}
                 </DataSourceIndicator>
                 <DataSourceInfo isRealData={metric.isRealData}>
-                  {metric.dataSource ? `소스: ${metric.dataSource}` : '더미 데이터'}
-                  {metric.isEstimated && ' (추정치)'}
+                  {metric.dataSource ? `소스: ${metric.dataSource}` : '실시간 시뮬레이션'}
+                  {metric.priority && ` (우선순위: ${metric.priority})`}
                 </DataSourceInfo>
               </>
             )}
@@ -265,6 +269,8 @@ const FixedIncomePage = () => {
 
       <ClickHint>
         💡 각 지표를 클릭하면 Trading Economics에서 상세 정보를 확인할 수 있습니다
+        <br />
+        ⚡ 최적화된 로딩으로 빠른 응답을 제공합니다
       </ClickHint>
     </PageLayout>
   );
