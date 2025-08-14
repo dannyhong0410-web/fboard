@@ -118,8 +118,6 @@ const fetchRealData = async (title, url) => {
       return {
         title,
         value: rate,
-        change: (Math.random() - 0.5) * 0.1, // 작은 변동
-        isPositive: Math.random() > 0.5,
         isRealData: true,
         dataSource: 'Trading Economics'
       };
@@ -130,8 +128,6 @@ const fetchRealData = async (title, url) => {
     return {
       title,
       value: getEstimatedValue(title),
-      change: (Math.random() - 0.5) * 0.05,
-      isPositive: Math.random() > 0.5,
       isRealData: true,
       dataSource: 'Trading Economics (Estimated)'
     };
@@ -143,8 +139,6 @@ const fetchRealData = async (title, url) => {
     return {
       title,
       value: getEstimatedValue(title),
-      change: (Math.random() - 0.5) * 0.05,
-      isPositive: Math.random() > 0.5,
       isRealData: true,
       dataSource: 'Trading Economics (Network Error)'
     };
@@ -269,8 +263,6 @@ export const fetchAllFixedIncomeDataOptimized = async () => {
         allRealData.push({
           title,
           value: getEstimatedValue(title),
-          change: (Math.random() - 0.5) * 0.05,
-          isPositive: Math.random() > 0.5,
           isRealData: true,
           dataSource: 'Trading Economics (Fallback)'
         });
@@ -293,8 +285,6 @@ export const fetchAllFixedIncomeDataOptimized = async () => {
     const estimatedData = Object.keys(REAL_DATA_URLS).map(title => ({
       title,
       value: getEstimatedValue(title),
-      change: (Math.random() - 0.5) * 0.05,
-      isPositive: Math.random() > 0.5,
       isRealData: true,
       dataSource: 'Trading Economics (Estimated)'
     }));

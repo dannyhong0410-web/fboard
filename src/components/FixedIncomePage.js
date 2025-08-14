@@ -61,13 +61,6 @@ const MetricValue = styled.div`
   text-align: center;
 `;
 
-const MetricChange = styled.div`
-  color: ${props => props.isPositive ? '#1a5f3c' : '#e74c3c'};
-  font-size: 0.9rem;
-  font-weight: 500;
-  text-align: center;
-`;
-
 const LoadingCard = styled.div`
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-radius: 15px;
@@ -251,15 +244,11 @@ const FixedIncomePage = () => {
                 <MetricValue>
                   {formatPercent(metric.value)}
                 </MetricValue>
-                <MetricChange isPositive={metric.isPositive}>
-                  {formatPercent(metric.change)}
-                </MetricChange>
                 <DataSourceIndicator isRealData={metric.isRealData}>
                   {metric.isRealData ? '실제 데이터' : '시뮬레이션'}
                 </DataSourceIndicator>
                 <DataSourceInfo isRealData={metric.isRealData}>
                   {metric.dataSource ? `소스: ${metric.dataSource}` : '실시간 시뮬레이션'}
-                  {metric.priority && ` (우선순위: ${metric.priority})`}
                 </DataSourceInfo>
               </>
             )}
