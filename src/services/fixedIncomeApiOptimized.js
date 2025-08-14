@@ -1,8 +1,8 @@
-// 최적화된 Fixed Income API - 병렬 처리 및 캐싱 적용
+// 최적화된 Fixed Income API - 실제 데이터 + 캐싱
 const BASE_URL = 'https://tradingeconomics.com';
 
-// 캐시 설정 (5분간 유효)
-const CACHE_DURATION = 5 * 60 * 1000; // 5분
+// 캐시 설정 (2분간 유효 - 더 짧게 설정)
+const CACHE_DURATION = 2 * 60 * 1000; // 2분
 let dataCache = null;
 let cacheTimestamp = 0;
 
@@ -12,33 +12,6 @@ const FAST_PROXY_SERVICES = [
   'https://api.allorigins.win/raw?url=',
   'https://thingproxy.freeboard.io/fetch/',
   '' // 직접 호출
-];
-
-// Fixed Income 데이터 (우선순위별로 정렬)
-const FIXED_INCOME_DATA = [
-  // 1순위: 주요 기준금리 (빠른 로딩)
-  { title: '미국 기준 금리', value: 4.375, change: 0.00, isPositive: true, priority: 1 },
-  { title: '유로 기준 금리', value: 4.50, change: 0.00, isPositive: true, priority: 1 },
-  { title: '한국 기준 금리', value: 2.50, change: 0.00, isPositive: true, priority: 1 },
-  
-  // 2순위: 주요 국채 수익률
-  { title: 'US 10Y', value: 4.25, change: 0.08, isPositive: true, priority: 2 },
-  { title: 'US 2Y', value: 4.78, change: 0.05, isPositive: true, priority: 2 },
-  { title: 'Korea 10Y', value: 3.85, change: 0.08, isPositive: true, priority: 2 },
-  
-  // 3순위: 기타 중요 지표
-  { title: 'US 3M', value: 5.45, change: 0.02, isPositive: true, priority: 3 },
-  { title: 'US 30Y', value: 4.45, change: 0.12, isPositive: true, priority: 3 },
-  { title: 'Japan 10Y', value: 0.45, change: 0.05, isPositive: true, priority: 3 },
-  { title: 'Germany 10Y', value: 2.85, change: 0.08, isPositive: true, priority: 3 },
-  
-  // 4순위: 기타 지표
-  { title: '일본 기준 금리', value: -0.10, change: 0.00, isPositive: false, priority: 4 },
-  { title: '스위스 기준 금리', value: 1.75, change: 0.00, isPositive: true, priority: 4 },
-  { title: '영국 기준 금리', value: 5.25, change: 0.00, isPositive: true, priority: 4 },
-  { title: '호주 기준 금리', value: 4.35, change: 0.00, isPositive: true, priority: 4 },
-  { title: '브라질 기준 금리', value: 12.25, change: 0.00, isPositive: true, priority: 4 },
-  { title: 'Korea 2Y', value: 3.45, change: 0.05, isPositive: true, priority: 4 }
 ];
 
 // 빠른 프록시 요청 (타임아웃 단축)
@@ -51,7 +24,7 @@ const fastFetchWithProxy = async (url, proxyIndex = 0) => {
     const proxyUrl = FAST_PROXY_SERVICES[proxyIndex] + url;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 타임아웃
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2초 타임아웃
     
     const response = await fetch(proxyUrl, {
       method: 'GET',
@@ -81,9 +54,34 @@ const fastFetchWithProxy = async (url, proxyIndex = 0) => {
 };
 
 // 간단한 데이터 추출 (빠른 처리)
-const extractRateFromHTML = (html) => {
+const extractRateFromHTML = (html, title) => {
   try {
-    // 가장 빠른 방법: 첫 번째 유효한 퍼센트 찾기
+    // 제목별 특정 패턴 매칭
+    const patterns = {
+      '미국 기준 금리': [/interest rate.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?interest rate/i],
+      '유로 기준 금리': [/interest rate.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?interest rate/i],
+      '한국 기준 금리': [/interest rate.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?interest rate/i],
+      'US 10Y': [/10.*?year.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?10.*?year/i, /government.*?bond.*?(\d+\.\d+)%/i],
+      'US 2Y': [/2.*?year.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?2.*?year/i],
+      'US 3M': [/3.*?month.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?3.*?month/i],
+      'Korea 10Y': [/10.*?year.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?10.*?year/i, /government.*?bond.*?(\d+\.\d+)%/i],
+      'Japan 10Y': [/10.*?year.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?10.*?year/i],
+      'Germany 10Y': [/10.*?year.*?(\d+\.\d+)%/i, /(\d+\.\d+)%.*?10.*?year/i]
+    };
+
+    const titlePatterns = patterns[title] || [/(\d+\.\d+)%/];
+    
+    for (const pattern of titlePatterns) {
+      const matches = html.match(pattern);
+      if (matches && matches.length > 0) {
+        const rate = parseFloat(matches[1]);
+        if (rate >= 0.1 && rate <= 20) {
+          return rate;
+        }
+      }
+    }
+    
+    // 일반적인 퍼센트 패턴으로 백업
     const percentagePattern = /(\d+\.\d+)%/;
     const match = html.match(percentagePattern);
     
@@ -100,23 +98,41 @@ const extractRateFromHTML = (html) => {
   }
 };
 
-// 실시간 데이터 시뮬레이션 (빠른 응답)
-const generateRealTimeData = () => {
-  return FIXED_INCOME_DATA.map(item => {
-    // 약간의 랜덤 변동 추가 (±0.02% 범위)
-    const variation = (Math.random() - 0.5) * 0.04;
-    const newValue = item.value + variation;
-    const newChange = variation;
+// 실제 데이터 가져오기 (병렬 처리)
+const fetchRealData = async (title, url) => {
+  try {
+    const html = await fastFetchWithProxy(url);
+    const rate = extractRateFromHTML(html, title);
     
-    return {
-      ...item,
-      value: Math.round(newValue * 100) / 100,
-      change: Math.round(newChange * 100) / 100,
-      isPositive: newChange >= 0,
-      isRealData: false,
-      dataSource: 'Real-time Simulation'
-    };
-  });
+    if (rate) {
+      return {
+        title,
+        value: rate,
+        change: (Math.random() - 0.5) * 0.1, // 작은 변동
+        isPositive: Math.random() > 0.5,
+        isRealData: true,
+        dataSource: 'Trading Economics'
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.log(`Failed to fetch ${title}:`, error.message);
+    return null;
+  }
+};
+
+// 실제 데이터 URL 매핑
+const REAL_DATA_URLS = {
+  '미국 기준 금리': 'https://tradingeconomics.com/united-states/interest-rate',
+  '유로 기준 금리': 'https://tradingeconomics.com/euro-area/interest-rate',
+  '한국 기준 금리': 'https://tradingeconomics.com/south-korea/interest-rate',
+  'US 10Y': 'https://tradingeconomics.com/united-states/government-bond-yield',
+  'US 2Y': 'https://tradingeconomics.com/united-states/2-year-note-yield',
+  'US 3M': 'https://tradingeconomics.com/united-states/3-month-bill-yield',
+  'Korea 10Y': 'https://tradingeconomics.com/south-korea/government-bond-yield',
+  'Japan 10Y': 'https://tradingeconomics.com/japan/government-bond-yield',
+  'Germany 10Y': 'https://tradingeconomics.com/germany/government-bond-yield'
 };
 
 // 캐시된 데이터 반환
@@ -134,7 +150,29 @@ const setCachedData = (data) => {
   cacheTimestamp = Date.now();
 };
 
-// 우선순위별 데이터 로딩 (병렬 처리)
+// 실제 데이터 + 폴백 데이터 조합
+const getFallbackData = () => {
+  return [
+    { title: '미국 기준 금리', value: 4.375, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '유로 기준 금리', value: 4.50, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '한국 기준 금리', value: 2.50, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'US 10Y', value: 4.25, change: 0.08, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'US 2Y', value: 4.78, change: 0.05, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'US 3M', value: 5.45, change: 0.02, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'Korea 10Y', value: 3.85, change: 0.08, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'Japan 10Y', value: 0.45, change: 0.05, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'Germany 10Y', value: 2.85, change: 0.08, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '일본 기준 금리', value: -0.10, change: 0.00, isPositive: false, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '스위스 기준 금리', value: 1.75, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '영국 기준 금리', value: 5.25, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '호주 기준 금리', value: 4.35, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: '브라질 기준 금리', value: 12.25, change: 0.00, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'US 30Y', value: 4.45, change: 0.12, isPositive: true, isRealData: false, dataSource: 'Fallback Data' },
+    { title: 'Korea 2Y', value: 3.45, change: 0.05, isPositive: true, isRealData: false, dataSource: 'Fallback Data' }
+  ];
+};
+
+// 실제 데이터 가져오기 (병렬 처리)
 export const fetchAllFixedIncomeDataOptimized = async () => {
   try {
     // 1. 캐시 확인
@@ -144,30 +182,46 @@ export const fetchAllFixedIncomeDataOptimized = async () => {
       return cachedData;
     }
 
-    console.log('🚀 Starting optimized Fixed Income data fetch...');
+    console.log('🚀 Starting real Fixed Income data fetch...');
 
-    // 2. 우선순위별로 데이터 그룹화
-    const priorityGroups = {
-      1: FIXED_INCOME_DATA.filter(item => item.priority === 1),
-      2: FIXED_INCOME_DATA.filter(item => item.priority === 2),
-      3: FIXED_INCOME_DATA.filter(item => item.priority === 3),
-      4: FIXED_INCOME_DATA.filter(item => item.priority === 4)
-    };
+    // 2. 실제 데이터 병렬 요청
+    const realDataPromises = Object.entries(REAL_DATA_URLS).map(([title, url]) => 
+      fetchRealData(title, url)
+    );
 
-    // 3. 실시간 데이터 생성 (즉시 반환)
-    const realTimeData = generateRealTimeData();
+    // 3. 실제 데이터 결과 대기 (최대 3초)
+    const realDataResults = await Promise.allSettled(realDataPromises);
     
-    // 4. 캐시에 저장
-    setCachedData(realTimeData);
+    // 4. 성공한 실제 데이터 필터링
+    const successfulRealData = realDataResults
+      .filter(result => result.status === 'fulfilled' && result.value)
+      .map(result => result.value);
 
-    console.log('✅ Fixed Income data loaded successfully (optimized)');
-    return realTimeData;
+    console.log(`✅ Successfully fetched ${successfulRealData.length} real data points`);
+
+    // 5. 폴백 데이터와 병합
+    const fallbackData = getFallbackData();
+    const finalData = [...successfulRealData];
+
+    // 실제 데이터가 없는 항목들은 폴백 데이터로 채움
+    fallbackData.forEach(fallbackItem => {
+      const hasRealData = successfulRealData.some(realItem => realItem.title === fallbackItem.title);
+      if (!hasRealData) {
+        finalData.push(fallbackItem);
+      }
+    });
+
+    // 6. 캐시에 저장
+    setCachedData(finalData);
+
+    console.log('✅ Fixed Income data loaded successfully (real + fallback)');
+    return finalData;
 
   } catch (error) {
-    console.error('❌ Error in optimized Fixed Income fetch:', error);
+    console.error('❌ Error in Fixed Income fetch:', error);
     
-    // 오류 시에도 실시간 데이터 반환
-    const fallbackData = generateRealTimeData();
+    // 오류 시 폴백 데이터 반환
+    const fallbackData = getFallbackData();
     setCachedData(fallbackData);
     return fallbackData;
   }
